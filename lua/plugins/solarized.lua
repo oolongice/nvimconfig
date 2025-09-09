@@ -12,14 +12,14 @@ return {
 		opts = {
 			-- See: https://github.com/maxmx03/solarized.nvim/blob/main/lua/solarized/palette.lua
 			palette = "selenized",
-			variant = "spring",
+			variant = "winter",
 			-- See: https://github.com/maxmx03/solarized.nvim?tab=readme-ov-file#default-config
 			styles = {
 				keywords = { bold = false },
 			},
 		},
 		config = function(plugin, opts)
-			vim.o.background = "light"
+			vim.o.background = "dark"
 			require(plugin.main).setup(opts)
 			vim.cmd.colorscheme = "solarized"
 		end,
