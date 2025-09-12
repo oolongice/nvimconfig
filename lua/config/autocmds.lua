@@ -11,3 +11,9 @@ vim.api.nvim_create_autocmd("ColorScheme", {
 	group = vim.api.nvim_create_augroup("UserColorColumn", { clear = true }),
 	callback = set_colorcolumn_hl,
 })
+
+-- auto find file's update
+vim.o.autoread = true
+vim.api.nvim_create_autocmd({ "FocusGained", "BufEnter", "CursorHold" }, {
+	command = "checktime",
+})
