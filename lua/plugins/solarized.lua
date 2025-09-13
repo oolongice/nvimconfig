@@ -19,7 +19,7 @@ return {
 			},
 		},
 		config = function(plugin, opts)
-			vim.o.background = "dark"
+			vim.o.background = "light"
 			require(plugin.main).setup(opts)
 			vim.cmd.colorscheme = "solarized"
 		end,
