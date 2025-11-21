@@ -25,10 +25,10 @@ return {
 		end,
 	},
 
-	{
-		"LazyVim/LazyVim",
-		opts = {
-			colorscheme = "solarized",
-		},
-	},
+	--{
+	--"LazyVim/LazyVim",
+	--opts = {
+	--colorscheme = "solarized",
+	--},
+	--	},
 }
