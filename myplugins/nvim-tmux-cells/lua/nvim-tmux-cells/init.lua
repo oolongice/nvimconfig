@@ -135,6 +135,88 @@ function M.send_current_cell()
 	end
 end
 
+local function trim(s)
+	return (s:gsub("^%s*(.-)%s*$", "%1"))
+end
+
+local function get_current_tmux_id()
+	-- 关键判断：如果环境变量 TMUX 为空，说明当前 Neovim 不在 Tmux 内部
+	if not vim.env.TMUX or vim.env.TMUX == "" then
+		return nil
+	end
+
+	-- 只有确认在 Tmux 内部时，才查询 ID
+	-- -p 意味着只输出信息，不显示在状态栏
+	local cmd = { "tmux", "display-message", "-p", "#{session_name}:#{window_index}.#{pane_index}" }
+	local id = vim.fn.system(cmd)
+
+	if vim.v.shell_error ~= 0 then
+		return nil
+	end
+
+	-- 去除换行符
+	return (id:gsub("^%s*(.-)%s*$", "%1"))
+end
+
+function M.select_target()
+	if not tmux_available() then
+		vim.notify("[nvim-tmux-cells] tmux not found", vim.log.levels.ERROR)
+		return
+	end
+
+	-- 1. 获取 Tmux 面板列表
+	-- -a: 列出所有会话
+	-- -F: 自定义格式。我们要构建一个特殊的字符串方便后续解析： "ID|描述"
+	-- 格式解释： #{session_name}:#{window_index}.#{pane_index} 是目标ID
+	--            #{pane_current_command} 是正在运行的程序
+	--            #{window_name} 是窗口名
+	local format_str =
+		"#{session_name}:#{window_index}.#{pane_index}|[#{session_name}] #{window_name} (cmd: #{pane_current_command})"
+	local cmd = { "tmux", "list-panes", "-a", "-F", format_str }
+
+	local output = vim.fn.system(cmd)
+	if vim.v.shell_error ~= 0 then
+		vim.notify("[nvim-tmux-cells] Failed to list tmux panes", vim.log.levels.ERROR)
+		return
+	end
+	local current_pane_id = get_current_tmux_id()
+	-- 2. 解析输出并准备列表
+	local items = {}
+	for line in output:gmatch("[^\r\n]+") do
+		local id = line:match("^(.-)|")
+
+		-- 过滤逻辑：
+		-- 如果 current_pane_id 存在（即我们在 Tmux 里），且等于列表中的 id，则跳过
+		if current_pane_id and id == current_pane_id then
+		-- 这是一个“当前所在 Pane”，跳过它，不加入列表
+		else
+			table.insert(items, line)
+		end
+	end
+
+	if #items == 0 then
+		vim.notify("[nvim-tmux-cells] No other tmux panes found", vim.log.levels.WARN)
+		return
+	end
+	-- 3. 调用 vim.ui.select
+	vim.ui.select(items, {
+		prompt = "Select Tmux Target Pane:",
+		-- 格式化显示的文本（只显示 | 后面的描述部分，隐藏 ID）
+		format_item = function(item)
+			local _, desc = item:match("^(.-)|(.*)$")
+			return desc or item
+		end,
+	}, function(choice)
+		-- 回调函数：当用户选择后执行
+		if choice then
+			local target_id = choice:match("^(.-)|")
+			if target_id then
+				M.set_target(target_id)
+			end
+		end
+	end)
+end
+
 function M.set_target(target)
 	M.config.target = target
 	vim.notify("[nvim-tmux-cells] tmux target set to " .. tostring(target))
@@ -158,6 +240,9 @@ function M.setup(opts)
 	vim.api.nvim_create_user_command("TmuxSetTarget", function(o)
 		M.set_target(o.args)
 	end, { nargs = 1 })
+	vim.api.nvim_create_user_command("TmuxSelect", function()
+		M.select_target()
+	end, {})
 	vim.api.nvim_create_user_command("TmuxShowTarget", function()
 		M.show_target()
 	end, {})
