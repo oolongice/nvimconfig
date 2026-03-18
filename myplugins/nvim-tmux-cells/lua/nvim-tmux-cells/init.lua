@@ -9,7 +9,10 @@ M.config = {
 	send_enter = true, -- send an Enter key after pasting the buffer
 	trim_leading_blank = true,
 	method = "paste_buffer", -- or "send_keys" (fallback if paste shows blanks)
+	visual_gap = true, -- visual gap
 }
+
+local ns_id = vim.api.nvim_create_namespace("nvim_tmux_cells_gap")
 
 local function join(lines, sep)
 	return table.concat(lines, sep or "\n")
@@ -110,6 +113,38 @@ local function tmux_paste(text)
 		vim.fn.system({ "tmux", "send-keys", "-t", target, "Enter" })
 	end
 	os.remove(tmp)
+end
+
+local function render_cell_gaps(bufnr)
+	if not M.config.visual_gap then
+		return
+	end
+
+	-- 如果没传 bufnr，就取当前 buffer
+	bufnr = bufnr or vim.api.nvim_get_current_buf()
+
+	-- 检查 buffer 是否有效
+	if not vim.api.nvim_buf_is_valid(bufnr) then
+		return
+	end
+
+	-- 清理旧的虚拟行
+	vim.api.nvim_buf_clear_namespace(bufnr, ns_id, 0, -1)
+
+	local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+	for i, line in ipairs(lines) do
+		if is_cell_marker(line) then
+			-- 在 #%% 的上方绘制虚拟行
+			-- 使用 "Comment" 高亮组，通常是灰色的，比较不刺眼
+			-- 你也可以把 string.rep("─", 80) 换成 "" 来实现纯空白的 gap
+			vim.api.nvim_buf_set_extmark(bufnr, ns_id, i - 1, 0, {
+				virt_lines = {
+					{ { string.rep("─", 80), "Comment" } },
+				},
+				virt_lines_above = true,
+			})
+		end
+	end
 end
 
 function M.send_current_cell()
@@ -249,6 +284,19 @@ function M.setup(opts)
 	vim.api.nvim_create_user_command("TmuxSendCell", function()
 		M.send_current_cell()
 	end, {})
+
+	if M.config.visual_gap then
+		local group = vim.api.nvim_create_augroup("NvimTmuxCellsGap", { clear = true })
+
+		-- 当进入 Buffer、离开插入模式、或者普通模式下修改文本时触发
+		vim.api.nvim_create_autocmd({ "BufEnter", "InsertLeave", "TextChanged" }, {
+			group = group,
+			pattern = "*.py", -- 建议仅对 python 文件生效，或者去掉 pattern 对所有文件生效
+			callback = function(args)
+				render_cell_gaps(args.buf)
+			end,
+		})
+	end
 end
 
 return M
